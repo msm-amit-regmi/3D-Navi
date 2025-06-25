@@ -61,11 +61,13 @@ The application will be available at http://localhost:12000
 
 ## GitHub Workflows
 
-This repository includes two GitHub workflows:
+This repository includes three GitHub workflows:
 
 1. **Pull Request Check**: Automatically checks if the application is running and endpoints are reachable when a pull request is created or updated.
 
 2. **Docker Build and Push**: Automatically builds a Docker image and pushes it to the GitHub Container Registry when changes are pushed to the main branch.
+
+3. **Deploy to AWS Server**: Automatically deploys the application to an AWS server if the Docker build workflow completes successfully. This workflow uses GitHub environment variables for AWS server credentials.
 
 To use the Docker image from GitHub Container Registry:
 
@@ -73,3 +75,15 @@ To use the Docker image from GitHub Container Registry:
 docker pull ghcr.io/msm-amit-regmi/3d-navi:latest
 docker run -p 12000:8000 ghcr.io/msm-amit-regmi/3d-navi:latest
 ```
+
+### Deployment
+
+The application is automatically deployed to the AWS server when changes are pushed to the main branch and all tests pass. The deployment workflow:
+
+1. Connects to the AWS server using SSH
+2. Stops and removes any existing container
+3. Pulls the latest Docker image
+4. Runs a new container with the updated image
+5. Verifies the deployment by checking if the application is accessible
+
+The deployed application is accessible at: http://[AWS_SERVER_IP]/
