@@ -20,13 +20,13 @@ jobs:
     - name: Set up SSH
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.AWS_SECRET_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ env.AWS_SECRET_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.AWS_SERVER_IP }} >> ~/.ssh/known_hosts
+        ssh-keyscan -H ${{ env.AWS_SERVER_IP }} >> ~/.ssh/known_hosts
       
     - name: Deploy to AWS Server
       run: |
-        ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.AWS_SERVER_IP }} << 'EOF'
+        ssh -i ~/.ssh/id_rsa ubuntu@${{ env.AWS_SERVER_IP }} << 'EOF'
           # Stop any running container
           docker stop 3d-navi-container || true
           docker rm 3d-navi-container || true
@@ -51,14 +51,14 @@ jobs:
         sleep 10
         
         # Check if the application is accessible
-        curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.AWS_SERVER_IP }}/ | grep 200
+        curl -s -o /dev/null -w "%{http_code}" http://${{ env.AWS_SERVER_IP }}/ | grep 200
         
         # Check the health endpoint
-        response=$(curl -s http://${{ secrets.AWS_SERVER_IP }}/health)
+        response=$(curl -s http://${{ env.AWS_SERVER_IP }}/health)
         echo $response
         if [[ $response != *"healthy"* ]]; then
           echo "Health check failed"
           exit 1
         fi
         
-        echo "Deployment successful! The application is running at http://${{ secrets.AWS_SERVER_IP }}/"
+        echo "Deployment successful! The application is running at http://${{ env.AWS_SERVER_IP }}/"
