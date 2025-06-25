@@ -32,7 +32,7 @@ jobs:
       
     - name: Set up SSH
       env:
-        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
+        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
         mkdir -p ~/.ssh
@@ -40,12 +40,21 @@ jobs:
         echo "AWS_SERVER_IP is set: $([[ -n "$AWS_SERVER_IP" ]] && echo "Yes" || echo "No")"
         echo "AWS_SECRET_KEY length: ${#AWS_SECRET_KEY}"
         
+        # Check if AWS_SECRET_KEY is set
+        if [ -z "$AWS_SECRET_KEY" ]; then
+          echo "Error: AWS_SECRET_KEY is not set. Please add it as a secret in the GitHub repository."
+          echo "Go to Settings > Secrets and variables > Actions > New repository secret"
+          echo "Name: AWS_SECRET_KEY"
+          echo "Value: Your private SSH key for connecting to the AWS server"
+          exit 1
+        fi
+        
         # Write the private key with proper line breaks
         # Try multiple approaches to handle different key formats
         echo "$AWS_SECRET_KEY" > ~/.ssh/id_rsa
         
         # If the key doesn't have proper line breaks, try to fix it
-        if ! grep -q "BEGIN RSA PRIVATE KEY" ~/.ssh/id_rsa; then
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
           echo "Key format issue detected, trying to fix..."
           echo "$AWS_SECRET_KEY" | sed 's/\\n/\n/g' > ~/.ssh/id_rsa
         fi
@@ -56,12 +65,24 @@ jobs:
           echo "$AWS_SECRET_KEY" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "Base64 decode failed"
         fi
         
+        # Check if the key file is valid
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
+          echo "Error: SSH key is not in the correct format. Please check the AWS_SECRET_KEY value."
+          echo "It should be a valid private key starting with '-----BEGIN RSA PRIVATE KEY-----' or similar."
+          echo "Current key format (first 50 characters):"
+          head -c 50 ~/.ssh/id_rsa
+          exit 1
+        fi
+        
         # Set proper permissions
         chmod 600 ~/.ssh/id_rsa
         
         # Ensure AWS_SERVER_IP is not empty before using it
         if [ -z "$AWS_SERVER_IP" ]; then
-          echo "Error: AWS_SERVER_IP is empty"
+          echo "Error: AWS_SERVER_IP is empty. Please add it as a variable in the GitHub environment."
+          echo "Go to Settings > Environments > 3d navi > Add variable"
+          echo "Name: AWS_SERVER_IP"
+          echo "Value: Your AWS server IP address"
           exit 1
         fi
         
@@ -71,11 +92,24 @@ jobs:
         
         # Test SSH connection
         echo "Testing SSH connection..."
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" echo "SSH connection successful" || { echo "SSH connection failed"; cat ~/.ssh/id_rsa | head -n 1; exit 1; }
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" echo "SSH connection successful" || { 
+          echo "SSH connection failed. Debugging information:"
+          echo "1. Check if the AWS_SERVER_IP is correct: $AWS_SERVER_IP"
+          echo "2. Check if the SSH key is valid:"
+          head -n 2 ~/.ssh/id_rsa
+          echo "..."
+          tail -n 2 ~/.ssh/id_rsa
+          echo "3. Check if the server is reachable:"
+          ping -c 3 "$AWS_SERVER_IP" || echo "Server is not responding to ping"
+          echo "4. Check if port 22 is open:"
+          nc -zv "$AWS_SERVER_IP" 22 || echo "Port 22 is not open or reachable"
+          exit 1
+        }
       
     - name: Deploy to AWS Server
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
+        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
@@ -112,18 +146,44 @@ jobs:
           echo "Logging in to GitHub Container Registry..."
           # We'll use anonymous pull since the image should be public
           
-          echo "Pulling the latest image..."
-          sudo docker pull ghcr.io/msm-amit-regmi/3d-navi:latest || {
-            echo "Failed to pull image. Checking Docker logs..."
-            sudo journalctl -u docker --no-pager -n 50
+          echo "Checking if GitHub Container Registry is accessible..."
+          curl -s -o /dev/null -w "%{http_code}\n" https://ghcr.io || {
+            echo "Failed to access GitHub Container Registry. Checking internet connectivity..."
+            ping -c 3 8.8.8.8 || echo "No internet connectivity"
             exit 1
           }
+          
+          echo "Pulling the latest image..."
+          # Try multiple times with increasing timeouts
+          MAX_PULL_RETRIES=3
+          for i in $(seq 1 $MAX_PULL_RETRIES); do
+            echo "Pull attempt $i of $MAX_PULL_RETRIES..."
+            if sudo docker pull ghcr.io/msm-amit-regmi/3d-navi:latest; then
+              echo "Image pulled successfully!"
+              break
+            elif [[ $i -eq $MAX_PULL_RETRIES ]]; then
+              echo "Failed to pull image after $MAX_PULL_RETRIES attempts. Checking Docker logs..."
+              sudo journalctl -u docker --no-pager -n 50
+              echo "Checking Docker daemon status..."
+              sudo systemctl status docker
+              echo "Checking disk space..."
+              df -h
+              exit 1
+            else
+              echo "Retrying in $((i * 5)) seconds..."
+              sleep $((i * 5))
+            fi
+          done
           
           echo "Running the new container..."
           sudo docker run -d \
             --name 3d-navi-container \
             -p 80:8000 \
             --restart unless-stopped \
+            --health-cmd="curl -f http://localhost:8000/ || exit 1" \
+            --health-interval=30s \
+            --health-timeout=10s \
+            --health-retries=3 \
             ghcr.io/msm-amit-regmi/3d-navi:latest
           
           echo "Verifying the container is running..."
@@ -142,6 +202,7 @@ jobs:
     - name: Verify Deployment
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
+        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
         if [ -z "$AWS_SERVER_IP" ]; then
