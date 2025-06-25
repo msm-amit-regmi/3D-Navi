@@ -44,7 +44,7 @@ jobs:
         fi
         
         # Add StrictHostKeyChecking=no to avoid host key verification issues
-        ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" << 'EOF'
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" << 'EOSSH'
           set -e  # Exit immediately if a command exits with a non-zero status
           
           echo "Stopping any existing container..."
@@ -65,7 +65,7 @@ jobs:
           docker ps | grep 3d-navi-container || { echo "Container failed to start"; exit 1; }
           
           echo "Deployment to server completed successfully"
-EOF
+        EOSSH
         
     - name: Verify Deployment
       env:
