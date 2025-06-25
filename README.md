@@ -44,3 +44,32 @@ pytest app/tests/
 - Three.js - 3D rendering library
 - Jinja2 - HTML templating
 - Uvicorn - ASGI server
+
+## Docker
+
+You can run the application using Docker:
+
+```bash
+# Build the Docker image
+docker build -t 3d-navi .
+
+# Run the container
+docker run -p 12000:8000 3d-navi
+```
+
+The application will be available at http://localhost:12000
+
+## GitHub Workflows
+
+This repository includes two GitHub workflows:
+
+1. **Pull Request Check**: Automatically checks if the application is running and endpoints are reachable when a pull request is created or updated.
+
+2. **Docker Build and Push**: Automatically builds a Docker image and pushes it to the GitHub Container Registry when changes are pushed to the main branch.
+
+To use the Docker image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/msm-amit-regmi/3d-navi:latest
+docker run -p 12000:8000 ghcr.io/msm-amit-regmi/3d-navi:latest
+```
