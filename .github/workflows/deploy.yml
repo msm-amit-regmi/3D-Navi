@@ -23,48 +23,78 @@ jobs:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
         mkdir -p ~/.ssh
-        echo "$AWS_SECRET_KEY" > ~/.ssh/id_rsa
+        # Write the private key with proper line breaks
+        echo "$AWS_SECRET_KEY" | sed 's/\\n/\n/g' > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
+        # Ensure AWS_SERVER_IP is not empty before using it
+        if [ -z "$AWS_SERVER_IP" ]; then
+          echo "Error: AWS_SERVER_IP is empty"
+          exit 1
+        fi
         ssh-keyscan -H "$AWS_SERVER_IP" >> ~/.ssh/known_hosts
       
     - name: Deploy to AWS Server
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
-        ssh -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" << 'EOF'
-          # Stop any running container
+        # Ensure AWS_SERVER_IP is not empty before using it
+        if [ -z "$AWS_SERVER_IP" ]; then
+          echo "Error: AWS_SERVER_IP is empty"
+          exit 1
+        fi
+        
+        # Add StrictHostKeyChecking=no to avoid host key verification issues
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$AWS_SERVER_IP" << 'EOF'
+          set -e  # Exit immediately if a command exits with a non-zero status
+          
+          echo "Stopping any existing container..."
           docker stop 3d-navi-container || true
           docker rm 3d-navi-container || true
           
-          # Pull the latest image
+          echo "Pulling the latest image..."
           docker pull ghcr.io/msm-amit-regmi/3d-navi:latest
           
-          # Run the new container
+          echo "Running the new container..."
           docker run -d \
             --name 3d-navi-container \
             -p 80:8000 \
             --restart unless-stopped \
             ghcr.io/msm-amit-regmi/3d-navi:latest
           
-          # Verify the container is running
-          docker ps | grep 3d-navi-container
-        EOF
+          echo "Verifying the container is running..."
+          docker ps | grep 3d-navi-container || { echo "Container failed to start"; exit 1; }
+          
+          echo "Deployment to server completed successfully"
+EOF
         
     - name: Verify Deployment
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
-        # Wait for the application to start
-        sleep 10
+        # Ensure AWS_SERVER_IP is not empty before using it
+        if [ -z "$AWS_SERVER_IP" ]; then
+          echo "Error: AWS_SERVER_IP is empty"
+          exit 1
+        fi
         
-        # Check if the application is accessible
-        curl -s -o /dev/null -w "%{http_code}" http://"$AWS_SERVER_IP"/ | grep 200
+        echo "Waiting for the application to start..."
+        sleep 15
         
-        # Check the health endpoint
-        response=$(curl -s http://"$AWS_SERVER_IP"/health)
-        echo $response
-        if [[ $response != *"healthy"* ]]; then
-          echo "Health check failed"
+        echo "Checking if the application is accessible..."
+        status_code=$(curl -s -o /dev/null -w "%{http_code}" http://"$AWS_SERVER_IP"/ || echo "Failed to connect")
+        echo "HTTP status code: $status_code"
+        
+        if [[ "$status_code" != "200" ]]; then
+          echo "Error: Application is not accessible. Expected status code 200, got $status_code"
+          exit 1
+        fi
+        
+        echo "Checking the health endpoint..."
+        response=$(curl -s http://"$AWS_SERVER_IP"/health || echo "Failed to connect")
+        echo "Health response: $response"
+        
+        if [[ "$response" != *"healthy"* ]]; then
+          echo "Health check failed: $response"
           exit 1
         fi
         
