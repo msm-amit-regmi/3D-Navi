@@ -114,10 +114,10 @@ jobs:
           echo "Approach 4: Using explicit newlines..."
           # This is a template - replace with actual key format if known
           cat > ~/.ssh/id_rsa << 'EOL'
-          -----BEGIN RSA PRIVATE KEY-----
-          ${{ vars.AWS_SECRET_KEY }}
-          -----END RSA PRIVATE KEY-----
-          EOL
+-----BEGIN RSA PRIVATE KEY-----
+${{ vars.AWS_SECRET_KEY }}
+-----END RSA PRIVATE KEY-----
+EOL
           chmod 600 ~/.ssh/id_rsa
         fi
         
