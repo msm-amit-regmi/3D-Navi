@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Navi - On-Demand Manufacturing Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <header>
+        <h1>3D Navi</h1>
+        <p>On-Demand Manufacturing Platform</p>
+    </header>
+    
+    <main>
+        <div class="container">
+            <div class="renderer-container">
+                <div id="renderer"></div>
+            </div>
+            
+            <div class="form-container">
+                <h2>Part Specifications</h2>
+                <form id="part-form">
+                    <div class="form-group">
+                        <label for="material">Material:</label>
+                        <select id="material" name="material">
+                            <option value="aluminum">Aluminum</option>
+                            <option value="steel">Steel</option>
+                            <option value="stainless-steel">Stainless Steel</option>
+                            <option value="titanium">Titanium</option>
+                            <option value="plastic">Plastic</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="surface-treatment">Surface Treatment:</label>
+                        <select id="surface-treatment" name="surface-treatment">
+                            <option value="none">None</option>
+                            <option value="anodized">Anodized</option>
+                            <option value="powder-coated">Powder Coated</option>
+                            <option value="polished">Polished</option>
+                            <option value="painted">Painted</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="plate-width">Plate Width (mm):</label>
+                        <input type="number" id="plate-width" name="plate-width" value="100" min="10" max="500">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="plate-height">Plate Height (mm):</label>
+                        <input type="number" id="plate-height" name="plate-height" value="100" min="10" max="500">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="plate-thickness">Plate Thickness (mm):</label>
+                        <input type="number" id="plate-thickness" name="plate-thickness" value="5" min="1" max="50">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hole-diameter">Hole Diameter (mm):</label>
+                        <input type="number" id="hole-diameter" name="hole-diameter" value="20" min="5" max="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hole-position-x">Hole Position X (mm):</label>
+                        <input type="number" id="hole-position-x" name="hole-position-x" value="50" min="0" max="500">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="hole-position-y">Hole Position Y (mm):</label>
+                        <input type="number" id="hole-position-y" name="hole-position-y" value="50" min="0" max="500">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="quantity">Quantity:</label>
+                        <input type="number" id="quantity" name="quantity" value="1" min="1" max="1000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="delivery-time">Delivery Time:</label>
+                        <select id="delivery-time" name="delivery-time">
+                            <option value="standard">Standard (5-7 days)</option>
+                            <option value="express">Express (2-3 days)</option>
+                            <option value="rush">Rush (24 hours)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="button" id="update-model">Update Model</button>
+                    <button type="button" id="get-quote">Get Quote</button>
+                </form>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 3D Navi. All rights reserved.</p>
+    </footer>
+    
+    <script src="{{ url_for('static', path='/js/renderer.js') }}"></script>
+    <script src="{{ url_for('static', path='/js/form.js') }}"></script>
+</body>
+</html>
