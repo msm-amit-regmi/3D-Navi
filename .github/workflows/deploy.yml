@@ -1,5 +1,13 @@
 name: Deploy to AWS Server
 
+# Important: This workflow requires the following environment variables to be set:
+# 1. AWS_SERVER_IP: The IP address of your AWS server
+# 2. AWS_SECRET_KEY: Your SSH private key for connecting to the AWS server
+#
+# To set these variables:
+# 1. Go to Settings > Environments > 3d navi > Add variable
+# 2. Add AWS_SERVER_IP and AWS_SECRET_KEY with their respective values
+
 on:
   workflow_run:
     workflows: ["Docker Build and Push"]
@@ -27,56 +35,46 @@ jobs:
     environment: 3d navi
     
     steps:
+    - name: Check Environment Variables
+      env:
+        AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
+        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
+      run: |
+        echo "Checking if required environment variables are set..."
+        
+        # Check AWS_SERVER_IP
+        if [[ -z "$AWS_SERVER_IP" ]]; then
+          echo "::error::AWS_SERVER_IP is not set in the environment variables"
+          echo "Please go to Settings > Environments > 3d navi > Add variable"
+          echo "Name: AWS_SERVER_IP"
+          echo "Value: Your AWS server IP address"
+          exit 1
+        else
+          echo "AWS_SERVER_IP is set ✓"
+        fi
+        
+        # Check AWS_SECRET_KEY (without revealing it)
+        if [[ -z "$AWS_SECRET_KEY" ]]; then
+          echo "::error::AWS_SECRET_KEY is not set in the environment variables"
+          echo "Please go to Settings > Environments > 3d navi > Add variable"
+          echo "Name: AWS_SECRET_KEY"
+          echo "Value: Your private SSH key for connecting to the AWS server"
+          exit 1
+        else
+          echo "AWS_SECRET_KEY is set ✓"
+          echo "AWS_SECRET_KEY length: ${#AWS_SECRET_KEY} characters"
+        fi
+        
     - name: Checkout code
       uses: actions/checkout@v3
       
     - name: Set up SSH
       env:
-        # Use environment variable for AWS_SECRET_KEY
-        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
         mkdir -p ~/.ssh
         # Debug environment variables (masked for security)
         echo "AWS_SERVER_IP is set: $([[ -n "$AWS_SERVER_IP" ]] && echo "Yes" || echo "No")"
-        echo "AWS_SECRET_KEY length: ${#AWS_SECRET_KEY}"
-        
-        # Check if AWS_SECRET_KEY is set
-        if [ -z "$AWS_SECRET_KEY" ]; then
-          echo "Error: AWS_SECRET_KEY is not set. Please add it as a variable in the GitHub environment."
-          echo "Go to Settings > Environments > 3d navi > Add variable"
-          echo "Name: AWS_SECRET_KEY"
-          echo "Value: Your private SSH key for connecting to the AWS server"
-          exit 1
-        fi
-        
-        # Write the private key with proper line breaks
-        # Try multiple approaches to handle different key formats
-        echo "$AWS_SECRET_KEY" > ~/.ssh/id_rsa
-        
-        # If the key doesn't have proper line breaks, try to fix it
-        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
-          echo "Key format issue detected, trying to fix..."
-          echo "$AWS_SECRET_KEY" | sed 's/\\n/\n/g' > ~/.ssh/id_rsa
-        fi
-        
-        # Ensure the key has the right format
-        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
-          echo "Key still has format issues, trying base64 decode..."
-          echo "$AWS_SECRET_KEY" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "Base64 decode failed"
-        fi
-        
-        # Check if the key file is valid
-        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
-          echo "Error: SSH key is not in the correct format. Please check the AWS_SECRET_KEY value."
-          echo "It should be a valid private key starting with '-----BEGIN RSA PRIVATE KEY-----' or similar."
-          echo "Current key format (first 50 characters):"
-          head -c 50 ~/.ssh/id_rsa
-          exit 1
-        fi
-        
-        # Set proper permissions
-        chmod 600 ~/.ssh/id_rsa
         
         # Ensure AWS_SERVER_IP is not empty before using it
         if [ -z "$AWS_SERVER_IP" ]; then
@@ -84,6 +82,54 @@ jobs:
           echo "Go to Settings > Environments > 3d navi > Add variable"
           echo "Name: AWS_SERVER_IP"
           echo "Value: Your AWS server IP address"
+          exit 1
+        fi
+        
+        # Create SSH key from GitHub Actions secret
+        echo "${{ vars.AWS_SECRET_KEY }}" > ~/.ssh/id_rsa_base64
+        
+        # Try multiple approaches to get a valid key
+        echo "Trying multiple approaches to get a valid SSH key..."
+        
+        # Approach 1: Direct use
+        echo "${{ vars.AWS_SECRET_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Approach 2: Fix newlines
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
+          echo "Approach 2: Fixing newlines..."
+          echo "${{ vars.AWS_SECRET_KEY }}" | sed 's/\\n/\n/g' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+        fi
+        
+        # Approach 3: Base64 decode
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
+          echo "Approach 3: Trying base64 decode..."
+          cat ~/.ssh/id_rsa_base64 | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "Base64 decode failed"
+          chmod 600 ~/.ssh/id_rsa
+        fi
+        
+        # Approach 4: Try with explicit newlines
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
+          echo "Approach 4: Using explicit newlines..."
+          # This is a template - replace with actual key format if known
+          cat > ~/.ssh/id_rsa << 'EOL'
+-----BEGIN RSA PRIVATE KEY-----
+${{ vars.AWS_SECRET_KEY }}
+-----END RSA PRIVATE KEY-----
+EOL
+          chmod 600 ~/.ssh/id_rsa
+        fi
+        
+        # Check if any approach worked
+        if ! grep -q "BEGIN" ~/.ssh/id_rsa; then
+          echo "Error: Could not create a valid SSH key from the provided AWS_SECRET_KEY."
+          echo "Please check the format of your AWS_SECRET_KEY in the GitHub environment."
+          echo "It should be a valid private key in one of these formats:"
+          echo "1. Complete key with proper line breaks"
+          echo "2. Key with escaped newlines (\\n)"
+          echo "3. Base64 encoded key"
+          echo "4. Key content only (without BEGIN/END markers)"
           exit 1
         fi
         
@@ -97,9 +143,14 @@ jobs:
           echo "SSH connection failed. Debugging information:"
           echo "1. Check if the AWS_SERVER_IP is correct: $AWS_SERVER_IP"
           echo "2. Check if the SSH key is valid:"
-          head -n 2 ~/.ssh/id_rsa
-          echo "..."
-          tail -n 2 ~/.ssh/id_rsa
+          if grep -q "BEGIN" ~/.ssh/id_rsa; then
+            echo "Key appears to be in the correct format."
+            echo "First line: $(head -n 1 ~/.ssh/id_rsa)"
+            echo "Last line: $(tail -n 1 ~/.ssh/id_rsa)"
+          else
+            echo "Key is not in the correct format."
+            echo "Content (first 50 chars): $(head -c 50 ~/.ssh/id_rsa)"
+          fi
           echo "3. Check if the server is reachable:"
           ping -c 3 "$AWS_SERVER_IP" || echo "Server is not responding to ping"
           echo "4. Check if port 22 is open:"
@@ -110,7 +161,6 @@ jobs:
     - name: Deploy to AWS Server
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
-        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
@@ -203,7 +253,6 @@ jobs:
     - name: Verify Deployment
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
-        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
         if [ -z "$AWS_SERVER_IP" ]; then
