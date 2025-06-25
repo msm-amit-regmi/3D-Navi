@@ -32,7 +32,8 @@ jobs:
       
     - name: Set up SSH
       env:
-        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        # Use environment variable for AWS_SECRET_KEY
+        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
       run: |
         mkdir -p ~/.ssh
@@ -42,8 +43,8 @@ jobs:
         
         # Check if AWS_SECRET_KEY is set
         if [ -z "$AWS_SECRET_KEY" ]; then
-          echo "Error: AWS_SECRET_KEY is not set. Please add it as a secret in the GitHub repository."
-          echo "Go to Settings > Secrets and variables > Actions > New repository secret"
+          echo "Error: AWS_SECRET_KEY is not set. Please add it as a variable in the GitHub environment."
+          echo "Go to Settings > Environments > 3d navi > Add variable"
           echo "Name: AWS_SECRET_KEY"
           echo "Value: Your private SSH key for connecting to the AWS server"
           exit 1
@@ -109,7 +110,7 @@ jobs:
     - name: Deploy to AWS Server
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
-        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
@@ -202,7 +203,7 @@ jobs:
     - name: Verify Deployment
       env:
         AWS_SERVER_IP: ${{ vars.AWS_SERVER_IP }}
-        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        AWS_SECRET_KEY: ${{ vars.AWS_SECRET_KEY }}
       run: |
         # Ensure AWS_SERVER_IP is not empty before using it
         if [ -z "$AWS_SERVER_IP" ]; then
